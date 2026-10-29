@@ -1,0 +1,2 @@
+# Python browser automation used by app.py. Google Chrome is installed separately.
+playwright>=1.50,<2

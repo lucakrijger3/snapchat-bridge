@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Snapchat Local Chats</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #242424;
+        background: #f5f5f2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; height: 100vh; height: 100dvh;
+        display: flex; flex-direction: column; overflow: hidden;
+      }
+      button, input { font: inherit; }
+      button { cursor: pointer; }
+      .topbar {
+        display: flex; justify-content: space-between; align-items: center;
+        gap: 18px; padding: 16px 24px; background: #fff; border-bottom: 1px solid #e5e5e1;
+      }
+      .brand { font-weight: 750; letter-spacing: -.02em; }
+      .brand span { background: #fffc00; padding: 3px 7px; border-radius: 7px; margin-right: 8px; }
+      .status { color: #666; font-size: 13px; }
+      .layout {
+        display: grid; grid-template-columns: 300px minmax(0, 1fr);
+        flex: 1; min-height: 0;
+      }
+      aside {
+        min-height: 0; display: flex; flex-direction: column;
+        background: #fff; border-right: 1px solid #e5e5e1;
+      }
+      .sidebar-head {
+        flex: 0 0 auto; background: #fff; padding: 18px 16px 12px;
+        border-bottom: 1px solid #eee;
+      }
+      h1 { font-size: 18px; margin: 0 0 5px; }
+      .hint { color: #777; font-size: 12px; }
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+      .sync-progress { flex: 1 0 100%; color: #666; font-size: 12px; }
+      .button {
+        border: 0; border-radius: 8px; background: #222; color: #fff; padding: 9px 12px;
+      }
+      .button.secondary { background: #efefec; color: #222; }
+      .button:disabled { opacity: .5; cursor: wait; }
+      #chat-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px; }
+      .chat-row {
+        display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+        border: 0; background: transparent; border-radius: 9px; padding: 11px 10px;
+      }
+      .chat-row:hover, .chat-row.active { background: #f1f1ed; }
+      .chat-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+      .conversation-head { flex: 0 0 auto; padding: 18px 22px; background: #fff; border-bottom: 1px solid #e5e5e1; }
+      .conversation-head h2 { font-size: 17px; margin: 0; }
+      #conversation {
+        flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+        padding: 22px; display: flex; flex-direction: column; gap: 10px;
+      }
+      .empty { margin: auto; color: #777; max-width: 420px; text-align: center; }
+      .message { max-width: min(70%, 620px); background: #fff; border: 1px solid #e9e9e4; border-radius: 14px; padding: 10px 13px; }
+      .message.mine { align-self: flex-end; background: #fffc00; border-color: #efec00; }
+      .message-reply { margin-bottom: 8px; padding: 5px 8px; border-left: 3px solid #777; border-radius: 4px; background: rgba(0, 0, 0, .06); }
+      .message-reply-author { font-size: 10px; font-weight: 600; color: #555; }
+      .message-reply-body { font-size: 12px; color: #555; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+      .message-author { font-size: 11px; color: #686868; margin-bottom: 3px; }
+      .message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .message-time { color: #777; font-size: 10px; margin-top: 5px; }
+      .message-status { color: #777; font-size: 10px; margin-top: 4px; font-style: italic; }
+      .message-open-snap {
+        display: inline-flex; align-items: center; margin-top: 8px;
+        text-decoration: none;
+      }
+      .message-snap-link {
+        color: inherit;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .message-snap-link:hover, .message-snap-link:focus-visible {
+        text-decoration: none;
+      }
+      .message-open-snap:hover, .message-open-snap:focus-visible {
+        background: #444; color: #fff;
+      }
+      .message-reaction { display: inline-flex; gap: 5px; margin-top: 6px; padding: 3px 7px; border-radius: 12px; background: rgba(0, 0, 0, .08); }
+      .message-reaction-author { color: #555; font-size: 10px; }
+      .message-actions { display: none; margin-top: 6px; }
+      .message:hover .message-actions, .message:focus-within .message-actions { display: block; }
+      .message-actions button, .reply-target button {
+        border: 0; border-radius: 6px; background: rgba(0, 0, 0, .08);
+        padding: 4px 8px; font-size: 11px;
+      }
+      .message-actions .reaction-button { padding: 3px 5px; font-size: 15px; }
+      .composer { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 20px; background: #fff; border-top: 1px solid #e5e5e1; }
+      .reply-target { flex: 1 0 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border-left: 3px solid #777; border-radius: 5px; background: #f1f1ed; }
+      .reply-target[hidden] { display: none; }
+      .reply-target-copy { min-width: 0; }
+      .reply-target-author { font-size: 11px; font-weight: 600; }
+      .reply-target-body { color: #666; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .composer input { flex: 1; border: 1px solid #deded9; border-radius: 9px; padding: 10px 12px; }
+      .notice { margin: 14px 20px 0; padding: 12px 14px; background: #fff7cc; border-radius: 9px; }
+      .error { color: #9a2424; }
+      @media (max-width: 700px) {
+        .topbar { flex: 0 0 auto; gap: 8px; padding: 12px 14px; }
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+          grid-template-rows: minmax(140px, 30dvh) minmax(0, 1fr);
+        }
+        aside { border-right: 0; border-bottom: 1px solid #ddd; }
+        .sidebar-head { padding: 12px; }
+        .controls { flex-wrap: wrap; }
+        main { min-height: 0; }
+        #conversation { padding: 14px; }
+        .message { max-width: 88%; }
+        .notice { flex: 0 0 auto; max-height: 20vh; overflow-y: auto; margin: 8px 12px 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span>●</span> Local Snapchat chats</div>
+      <div id="status" class="status">Connecting…</div>
+    </header>
+    <div id="notice" class="notice" hidden></div>
+    <div class="layout">
+      <aside>
+        <div class="sidebar-head">
+          <h1>Your chats</h1>
+          <div class="hint">All chats are saved and synced automatically.</div>
+          <div class="controls">
+            <button id="discover" class="button secondary">Find chats</button>
+            <button id="sync" class="button secondary">Sync now</button>
+            <button id="sync-full-history" class="button secondary">Sync full history (max 2 min)</button>
+            <button id="login" class="button" hidden>I’m signed in</button>
+            <span id="sync-progress" class="sync-progress" role="status" aria-live="polite" hidden></span>
+          </div>
+        </div>
+        <div id="chat-list"></div>
+      </aside>
+      <main>
+        <div class="conversation-head"><h2 id="selected-title">Select a chat</h2></div>
+        <div id="conversation"><div class="empty">Choose a chat from the list to view its locally saved history.</div></div>
+        <form id="composer" class="composer">
+          <div id="reply-target" class="reply-target" hidden>
+            <div class="reply-target-copy">
+              <div id="reply-target-author" class="reply-target-author"></div>
+              <div id="reply-target-body" class="reply-target-body"></div>
+            </div>
+            <button id="reply-cancel" type="button" aria-label="Cancel reply">Cancel</button>
+          </div>
+          <input id="message" autocomplete="off" placeholder="Write a Snapchat message…" disabled>
+          <button class="button" type="submit" disabled>Send</button>
+        </form>
+      </main>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let selectedChat = null;
+      let optimisticMessage = null;
+      let replyTarget = null;
+      const reactionChoices = [
+        ["❤️", "Love"], ["😂", "Laugh"], ["🔥", "Fire"], ["👍", "Thumbs up"],
+        ["👎", "Thumbs down"], ["😢", "Cry"], ["🤯", "Shocked"], ["❓", "Question"],
+      ];
+
+      function setReplyTarget(message) {
+        replyTarget = message ? {
+          author: message.author,
+          body: message.body,
+          timestamp: message.timestamp,
+        } : null;
+        $("reply-target").hidden = !replyTarget;
+        if (replyTarget) {
+          $("reply-target-author").textContent = `Replying to ${replyTarget.author}`;
+          $("reply-target-body").textContent = replyTarget.body;
+        }
+      }
+
+      function showError(error) {
+        $("notice").hidden = false;
+        $("notice").className = "notice error";
+        $("notice").textContent = error.message || String(error);
+      }
+
+      async function api(path, options = {}) {
+        const response = await fetch(path, {
+          ...options,
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+        return payload;
+      }
+
+      async function loadStatus() {
+        const status = await api("/api/status");
+        const last = status.last_received ? new Date(status.last_received).toLocaleString() : "not yet";
+        $("status").textContent = `${status.browser} · last received: ${last}`;
+        $("login").hidden = status.logged_in;
+        if (status.error) {
+          $("notice").hidden = false;
+          $("notice").className = "notice error";
+          $("notice").textContent = status.error;
+        } else if (!status.logged_in) {
+          $("notice").hidden = false;
+          $("notice").className = "notice";
+          $("notice").textContent = "Sign in to Snapchat in the Chrome window, then choose “I’m signed in”.";
+        } else {
+          $("notice").hidden = true;
+        }
+      }
+
+      async function loadSyncProgress() {
+        const status = await api("/api/status");
+        const progress = $("sync-progress");
+        if (!status.syncing || !status.sync_chat || !status.sync_timestamp) {
+          progress.hidden = true;
+          progress.textContent = "";
+          return;
+        }
+        const timestamp = new Date(status.sync_timestamp).toLocaleString();
+        progress.textContent = status.sync_full_history
+          ? `Full history · ${status.sync_chat} · scanning toward oldest`
+          : `Synchroniseert ${status.sync_chat} · vanaf ${timestamp}`;
+        progress.hidden = false;
+      }
+
+      async function loadChats({ reenableAll = false } = {}) {
+        const { chats } = await api("/api/chats");
+        await Promise.all(chats.map(async (chat) => {
+          if (chat.enabled && !reenableAll) return;
+          await api(`/api/chats/${chat.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ enabled: true }),
+          });
+          chat.enabled = true;
+        }));
+        const list = $("chat-list");
+        const previousScrollTop = list.scrollTop;
+        list.replaceChildren();
+        for (const chat of chats) {
+          const row = document.createElement("button");
+          row.className = `chat-row${selectedChat?.id === chat.id ? " active" : ""}`;
+          row.type = "button";
+          const name = document.createElement("span");
+          name.className = "chat-name";
+          name.textContent = chat.title;
+          row.append(name);
+          row.addEventListener("click", () => selectChat(chat));
+          list.append(row);
+        }
+        if (!chats.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint";
+          empty.style.padding = "0 12px";
+          empty.textContent = "No chats found yet. Sign in, then choose Find chats.";
+          list.append(empty);
+        }
+        list.scrollTop = previousScrollTop;
+      }
+
+      async function selectChat(chat) {
+        if (selectedChat?.id !== chat.id) setReplyTarget(null);
+        selectedChat = chat;
+        $("selected-title").textContent = chat.title;
+        $("message").disabled = false;
+        $("composer").querySelector('button[type="submit"]').disabled = false;
+        await loadMessages();
+        await loadChats();
+      }
+
+      async function loadMessages() {
+        if (!selectedChat) return;
+        const { messages } = await api(`/api/messages?chat=${encodeURIComponent(selectedChat.id)}&include_custom=true`);
+        const panel = $("conversation");
+        const wasAtBottom = panel.scrollHeight - panel.scrollTop - panel.clientHeight < 60;
+        const previousScrollTop = panel.scrollTop;
+        panel.replaceChildren();
+        const visibleMessages = [...messages];
+        if (optimisticMessage?.chatId === selectedChat.id &&
+            !messages.some(message => message.status === "sending" && message.body === optimisticMessage.body)) {
+          visibleMessages.push(optimisticMessage.message);
+        }
+        if (!visibleMessages.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "No saved timestamped messages for this chat. Press Sync now to sync its history.";
+          panel.append(empty);
+          return;
+        }
+        for (const message of visibleMessages) {
+          const bubble = document.createElement("div");
+          bubble.className = `message${message.author.toLowerCase() === "you" ? " mine" : ""}`;
+          const author = document.createElement("div");
+          author.className = "message-author";
+          author.textContent = message.author;
+          if (message.reply_to_body) {
+            const reply = document.createElement("div");
+            reply.className = "message-reply";
+            const replyAuthor = document.createElement("div");
+            replyAuthor.className = "message-reply-author";
+            replyAuthor.textContent = message.reply_to_author || "Reply";
+            const replyBody = document.createElement("div");
+            replyBody.className = "message-reply-body";
+            replyBody.textContent = message.reply_to_body;
+            reply.append(replyAuthor, replyBody);
+            bubble.append(reply);
+          }
+          const body = document.createElement("div");
+          body.className = "message-body";
+          let snapLink = null;
+          if (message.link_url) {
+            const link = new URL(message.link_url, window.location.href);
+            if (link.protocol === "https:" && link.hostname === "www.snapchat.com") {
+              snapLink = link;
+            }
+          }
+          if (snapLink) {
+            const openSnap = document.createElement("a");
+            openSnap.className = "message-snap-link";
+            openSnap.href = snapLink.href;
+            openSnap.target = "_blank";
+            openSnap.rel = "noopener noreferrer";
+            const text = document.createElement("strong");
+            text.textContent = message.body;
+            openSnap.append(text);
+            body.append(openSnap);
+          } else {
+            body.textContent = message.body;
+          }
+          const stamp = document.createElement("div");
+          stamp.className = "message-time";
+          stamp.textContent = new Date(message.timestamp).toLocaleString();
+          bubble.append(author, body, stamp);
+          for (const messageReaction of message.reactions || []) {
+            const reaction = document.createElement("div");
+            reaction.className = "message-reaction";
+            reaction.title = messageReaction.author;
+            const emoji = document.createElement("span");
+            emoji.textContent = messageReaction.emoji;
+            const reactionAuthor = document.createElement("span");
+            reactionAuthor.className = "message-reaction-author";
+            reactionAuthor.textContent = messageReaction.author;
+            reaction.append(emoji, reactionAuthor);
+            bubble.append(reaction);
+          }
+          const actions = document.createElement("div");
+          actions.className = "message-actions";
+          const replyButton = document.createElement("button");
+          replyButton.type = "button";
+          replyButton.textContent = "Reply";
+          replyButton.setAttribute("aria-label", `Reply to ${message.author}`);
+          replyButton.disabled = message.status === "sending";
+          replyButton.addEventListener("click", () => setReplyTarget(message));
+          actions.append(replyButton);
+          for (const [emoji, label] of reactionChoices) {
+            const reactionButton = document.createElement("button");
+            reactionButton.className = "reaction-button";
+            reactionButton.type = "button";
+            reactionButton.textContent = emoji;
+            reactionButton.title = `React with ${label}`;
+            reactionButton.setAttribute("aria-label", `React with ${label}`);
+            reactionButton.disabled = message.status === "sending";
+            reactionButton.addEventListener("click", async () => {
+              try {
+                await api("/api/react", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    chat_id: selectedChat.id,
+                    target: {
+                      author: message.author,
+                      body: message.body,
+                      timestamp: message.timestamp,
+                    },
+                    emoji,
+                  }),
+                });
+                await loadMessages();
+              } catch (error) { showError(error); }
+            });
+            actions.append(reactionButton);
+          }
+          if (!message.is_custom) bubble.append(actions);
+          if (message.status === "sending") {
+            const status = document.createElement("div");
+            status.className = "message-status";
+            status.textContent = "Sending…";
+            bubble.append(status);
+          }
+          panel.append(bubble);
+        }
+        panel.scrollTop = wasAtBottom ? panel.scrollHeight : previousScrollTop;
+      }
+
+      $("reply-cancel").addEventListener("click", () => setReplyTarget(null));
+
+      $("discover").addEventListener("click", async () => {
+        try {
+          $("discover").disabled = true;
+          await api("/api/chats/discover", { method: "POST", body: "{}" });
+          await loadChats({ reenableAll: true });
+          $("notice").hidden = true;
+        } catch (error) { showError(error); }
+        finally { $("discover").disabled = false; }
+      });
+
+      $("sync").addEventListener("click", async () => {
+        try {
+          $("sync").disabled = true;
+          $("sync-full-history").disabled = true;
+          const result = await api("/api/sync", { method: "POST", body: "{}" });
+          await loadChats();
+          await loadMessages();
+          await loadStatus();
+          $("status").textContent += ` · synced ${result.messages} new`;
+          if (result.errors?.length) {
+            showError(new Error(`Some chats could not sync: ${result.errors.join("; ")}`));
+          } else {
+            $("notice").hidden = true;
+          }
+        } catch (error) { showError(error); }
+        finally {
+          $("sync").disabled = false;
+          $("sync-full-history").disabled = false;
+        }
+      });
+
+      $("sync-full-history").addEventListener("click", async () => {
+        try {
+          $("sync").disabled = true;
+          $("sync-full-history").disabled = true;
+          const result = await api("/api/sync/full-history", {
+            method: "POST",
+            body: "{}",
+          });
+          await loadChats();
+          await loadMessages();
+          await loadStatus();
+          $("status").textContent += ` · full history: ${result.messages} new`;
+          if (result.errors?.length) {
+            showError(new Error(`Full-history sync incomplete: ${result.errors.join("; ")}`));
+          } else {
+            $("notice").hidden = true;
+          }
+        } catch (error) { showError(error); }
+        finally {
+          $("sync").disabled = false;
+          $("sync-full-history").disabled = false;
+        }
+      });
+
+      $("login").addEventListener("click", async () => {
+        try {
+          $("login").disabled = true;
+          await api("/api/login/complete", { method: "POST", body: "{}" });
+          await loadStatus();
+          await loadChats();
+        } catch (error) { showError(error); }
+        finally { $("login").disabled = false; }
+      });
+
+      $("composer").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!selectedChat || !$("message").value.trim()) return;
+        const chat = selectedChat;
+        const body = $("message").value;
+        const reply = replyTarget;
+        optimisticMessage = {
+          chatId: chat.id,
+          body: body.trim(),
+          message: {
+            author: "You",
+            body: body.trim(),
+            timestamp: new Date().toISOString(),
+            status: "sending",
+            ...(reply ? {
+              reply_to_author: reply.author,
+              reply_to_body: reply.body,
+            } : {}),
+          },
+        };
+        try {
+          await loadMessages();
+          await api("/api/send", {
+            method: "POST",
+            body: JSON.stringify({
+              chat_id: chat.id,
+              body,
+              ...(reply ? { reply_to: reply } : {}),
+            }),
+          });
+          optimisticMessage = null;
+          $("message").value = "";
+          setReplyTarget(null);
+          await loadMessages();
+        } catch (error) {
+          optimisticMessage = null;
+          showError(error);
+          await loadMessages();
+        }
+      });
+
+      Promise.all([loadStatus(), loadChats()]).catch(showError);
+      window.setInterval(() => {
+        loadStatus().catch(showError);
+        loadChats().catch(showError);
+      }, 15_000);
+      window.setInterval(() => {
+        loadMessages().catch(showError);
+      }, 1_000);
+      window.setInterval(() => {
+        loadSyncProgress().catch(showError);
+      }, 500);
+    </script>
+  </body>
+</html>
