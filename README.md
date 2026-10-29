@@ -1,85 +1,74 @@
-# Snapchat Local Chats
+First of all, yes this is vibecoded. Do I care? No. So why would you.. I wanted Snapchat in my Beeper client, so with my little coding skills and my prompting skills I let Copilot make it.
+It works. If anyone is willing to take his time and make these approximately 10000 lines of codes safe and optimized, be my guest and clone this repositry. Also, I'm Dutch so this bridge will probably only work if your snapchat's language is Dutch.
 
-A local-only web app for selecting Snapchat chats, saving timestamped message history in SQLite, and sending messages through the visible Snapchat Web page. An optional, separate adapter connects enabled chats to Beeper; it does not change the local app or its UI.
+# Snapchat Bridge
 
-## Start
+## What works
 
-Requires Python 3.10+ and Google Chrome. Install the Python dependency and start the app:
+- [x] Discover Snapchat chats and create corresponding Beeper chats.
+- [x] Sync messages, including messages sent directly in Snapchat.
+- [x] Show incoming reactions in Beeper and send supported emoji reactions from Beeper.
+- [x] Reply to and delete text messages.
+- [x] Send custom best-friend status and streak-at-risk notifications. Streak counts are tracked and available with `!streak` and `!info`; positive streak-count change notifications are intentionally disabled.
+- [x] Download incoming media and send supported images from Beeper.
+- [x] Notify about received Snaps with a link to Snapchat, and remove the notice when the Snap is opened.
+- [x] Sync incoming voice messages, show “Nieuw audiobericht,” and mark the latest Beeper message as read when Snapchat shows “Opened” or “Geopend.”
+- [x] Refresh and sync Snapchat avatars.
+- [x] Use `!streak` or `!info` for saved streak/friend status, and `!snap` for an “Open Snapchat” link in a bridged chat.
+- [x] Keep text replies and reactions available while rejecting replies, reactions, and deletions on media attachments with a temporary notice.
+- Chats with one remote sender are registered as direct chats; chats with multiple senders are registered as group chats.
+- Beeper permits one reaction per user per message; a new reaction replaces that user's previous one.
+- Media interaction attempts are removed and produce a temporary explanatory notice. Large incoming media groups are split into Beeper messages of at most 10 attachments. Outgoing images are limited to 40 MiB; outgoing videos, stickers, and audio are not supported.
+- Command messages are removed immediately, and command responses expire after 15 seconds.
+- Consecutive identical plain-text messages from the same sender are displayed once when their content matches after Unicode and whitespace normalization. Messages separated by another message, with different reply targets, or containing media remain distinct.
+- Startup sync omits historical media. Later targeted scans deliver only media newer than the initial-sync cutoff. New media found on an already-synchronized message is sent in a follow-up update.
+- The bridge uses Playwright with the visible Snapchat Web page and does not call Snapchat's private APIs. Snapchat may change its page structure; if that happens, the browser automation may need updated selectors.
+
+## Snapchat language
+
+The bridge is built and tested primarily with Snapchat set to Dutch. Some common English status labels are recognized, but the English interface and other languages are not fully supported; controls such as **Chat sluiten** and **Afgeleverd** are matched using Dutch text.
+
+To adapt it to another language, search `app.py` for Dutch interface strings (including `Chat sluiten`, `Afgeleverd`, and `Aan het typen...`) and add that language's exact labels to the relevant selectors and status-matching patterns. Alternatively, set Snapchat's display language to Dutch.
+
+## Requirements
+
+- Python 3.10 or later
+- Google Chrome
+- Go
+- `bbctl`, installed and authenticated as described in the [bridge-manager README](https://github.com/beeper/bridge-manager#usage)
+
+Install the Python dependency:
 
 ```sh
 python3 -m pip install -r requirements.txt
-python3 app.py
 ```
 
-Open <http://127.0.0.1:8767>. Chrome remains visible for debugging. Sign in to Snapchat in that window, return to the local page, and choose **I’m signed in**. Chrome audio is muted. To sign in again after a session expires, stop the app, remove `data/login.json`, restart, and sign in through the visible Chrome window.
+## Start the bridge
 
-`requirements.txt` lists the Python app's dependencies; Google Chrome is installed separately. The optional Go Beeper bridge uses the dependencies in `go.mod`.
-
-## Local page
-
-- The chat picker and conversation have independent scroll areas. The conversation header and message composer stay in place while message history scrolls. On narrow screens, the chat picker appears above the conversation.
-- Select chats in the sidebar to include them in sync; selecting a chat to view it does not enable it.
-- **Find chats** refreshes the saved chat list. **Sync now** scans all enabled chats within the normal seven-day limit. **Sync full history (max 2 min)** scans enabled chats past that limit, scrolling toward the oldest available message with a shared two-minute scrolling budget for the whole run. If time runs out, saved messages are kept; run it again to scan further back.
-- While a sync is running, a status line below the sync buttons shows the current chat and whether it is scanning from the usual timestamp or toward the oldest history. It disappears when the sync finishes.
-- Messages found during scrolling are saved immediately and appear in the local conversation as the scan proceeds. The conversation view refreshes periodically while keeping its scroll position unless it was already at the bottom.
-- Replies show a compact preview of the quoted sender and message above the response.
-- Hover over a saved text message and choose **Reply** to quote it. The app locates that message in Snapchat, opens its reply action, and sends your response when you press **Send** or Enter. Replies to media attachments are removed from Beeper and produce an italic notice that disappears after five seconds.
-- Deleting a text message in Beeper asks Snapchat to delete the corresponding message through its hover menu. Deleting a Snapchat media attachment is not supported; the bridge leaves it on Snapchat and sends a temporary notice with an **Open Snapchat instead** link. The local app removes the saved timeline from a deleted text message's timestamp onward (including same-timestamp grouped messages), clears media scan markers in the repaired range, and rescans messages and media back to that timestamp. This explicit repair scan may restore media from before the initial-sync cutoff. The bridge redacts the affected old Beeper entries, republishes the rescanned messages and saved custom notifications into the existing room, and refreshes that room's chat info; it does not create a replacement room.
-- Hover over a saved text message and choose one of the eight supported emoji buttons to react in Snapchat. Snapchat allows one reaction from you per message; choosing another replaces your previous reaction. Beeper uses the connected Beeper account as the sender and enforces the same one-reaction limit. Multiple reactions from different people are still shown on the message and synced as native Beeper reactions, including six additional Snapchat-only emoji; the six additional emoji cannot be sent from the local page or Beeper. Reactions to media attachments are removed from Beeper and produce an italic notice that disappears after five seconds.
-- Custom status notifications appear in Beeper as messages from an existing Snapchat chat participant (the exact direct-chat contact identity where available), rather than a second ghost derived from the chat title, so they can trigger normal incoming-message notifications. Received-snap notices show “{person} has sended you a Snap” as a bold, clickable Snapchat link and are removed from the local history and Beeper when the snap status disappears from its visible chat row. When Snapchat shows “Geopend” or “Opened,” the bridge marks the latest message in that Beeper chat as read without opening that Snapchat conversation. The status timestamp is not required for this. Send `!streak` or `!info` in a bridged chat to get the latest saved streak or friend status, or `!snap` to get an “Open Snapchat” link. These commands are handled locally and never sent to Snapchat; the command is removed from Beeper immediately, the reply appears immediately, and the reply is removed after 15 seconds.
-- Beeper chats use the Snapchat Bitmoji avatar shown on the chat row when one is available, including group chats. The bridge uploads it to Matrix and updates it when a later chat-list scan finds a change.
-- Sending a message through the local page shows it immediately with **Sending…** status. The status clears when the targeted scan finds the message.
-- Outgoing Snapchat echoes that differ only in whitespace reuse the already-saved message at the same timestamp, preventing link formatting from creating a second Beeper message.
-- Consecutive plain-text messages from the same sender with the same content after Unicode and whitespace normalization are shown once, even when they arrive in separate syncs. Messages separated by another message, with different reply targets, or containing media remain distinct.
-
-## Data and sync
-
-- `data/chats.sqlite3` stores selected chats, available Bitmoji avatar URLs, message history and newly received media, send status, independent per-chat sync cursors, custom notifications, and the last observed chat-list streak/friend statuses. SQLite uses WAL mode so the local app can persist scan results while the Beeper bridge reads messages and attachments.
-- The app rescans Snapchat's full chat list once per day to refresh private-chat Bitmoji images and identify empty group chats. It runs at **03:00 local machine time** by default; set `SNAPCHAT_AVATAR_SYNC_TIME=HH:MM` before starting `app.py` to choose another 24-hour local time (for example, `06:30`). Group chats are kept as group rooms even when they have no messages, but group avatars are not stored or synced; any prior bridge-set group avatars are silently removed. A failed scan is retried after 15 minutes.
-- `data/chrome-profile/` stores the browser session. Do not share this folder or the database.
-- While idle with no chat open, the app keeps Snapchat's chat list scrolled to the top. If five or fewer chats are saved, it refreshes chat discovery every five minutes; the daily avatar refresh also leaves the list at the top.
-- Run `python3 reset_database.py --confirm` to delete the `sh-snapchat` Beeper registration, then back up and clear the local chat database; it also removes timestamped `data/app.log` entries older than 24 hours. `bbctl` prompts you for confirmation in the terminal and waits for your response. The reset aborts without clearing the database if deletion fails. Stop the app first.
-- The app binds only to `127.0.0.1`; do not expose it to a network.
-- Enabled chats sync once when the app starts (if the saved login is available) and again when **Sync now** is clicked. There is no recurring full-chat sync.
-- Messages Snapchat attributes to **AI** or **MYAI** are omitted from history.
-- Startup/history scans and **Sync now** continue to save text and reactions only; they do not download historical photos, videos, stickers, or audio. During the initial startup sync, each visible media row is marked as intentionally skipped for media so a later targeted sync does not backfill old attachments. These markers identify a row by its timestamp, sender, media/body identity, and row/column layout rather than its current list position. At the end of the initial scan, a subsecond-precision wall-clock cutoff is saved for every selected chat, including empty chats; idle and post-send targeted syncs persist only messages strictly newer than that cutoff and fail closed if a cutoff is missing. This also prevents pre-initial-sync media omitted from the rendered or virtualized list from leaking into later scans. Initial sync and backfill behavior are unchanged. After startup sync completes, the idle app checks every chat row currently visible in Snapchat's chat list every 3 seconds, without scrolling. It updates visible streak, hourglass, and best-friend statuses. The exact visible status **Aan het typen...** (including Snapchat's rendered Unicode-ellipsis form **Aan het typen…**) sends the standard typing indicator to that chat in Beeper; the indicator is cleared when the status disappears. This status never opens the Snapchat chat. Typing diagnostics are logged as `[typing]` lines in `data/app.log` and the bridge terminal; a queued event is distinct from an event Beeper ignored. The idle scanner opens a chat for targeted sync only when its visible status is **Nieuwe chat**, **Nieuwe Chats en Snaps**, **Nieuwe Snap**, **Nieuw audiobericht**, **heeft op je chat gereageerd**, **Afgeleverd**, **Gebeld**/**Called**, or their supported English labels, and only when that row's `time[datetime]` value differs from the last successfully synced value stored for that chat. **Afgeleverd** can trigger a targeted sync, but never a Beeper read receipt. The scanner does not use the time element's title or displayed text. **Geopend**/**Opened** is tracked from the current visible scan regardless of timestamp and marks the latest message in the Beeper room read without opening that Snapchat chat; this state is cleared when the label changes, disappears from the scan, or the browser worker errors. Each eligible chat is synced for text, reactions, replies, and new media in the same scan, using that chat's message cursor as the media lower bound. Idle syncs persist incoming message rows only when their individual timestamp is strictly newer than the initial-sync cutoff; the same per-row timestamp check prevents media from earlier stacked rows or horizontally grouped tiles from being handed off later. For incoming and outgoing-text targeted syncs, the app records the chat row's `time[datetime]`, syncs immediately, closes the chat, and compares the timestamp again. It repeats only if the timestamp changed and the new status is **Ontvangen**/**Received**; it does not wait between scans. If a send, reply, reaction, or media action is queued during a scan, the scan stops at its next checkpoint, closes the chat, and yields to that action. Rows without a targeted-sync status are never opened by the idle scanner. A received-snap status also creates a deduplicated Beeper notification with an **Open Snapchat** link. Once a media row's saved attachment count matches its loaded tile count and row/column layout, its completion is stored and it is skipped on later scans; the newest row stays eligible for additional media. Loaded image and video blobs are downloaded directly from each tile; video previews are opened only when needed, and inline audio blobs are read without clicking or playing them. Grouped attachments are included while media embedded in quoted replies is excluded. Targeted incoming and post-send scans are limited to three conversation scrolls.
-- Targeted media scans print `[media]` diagnostics including candidate, clicked, preview, and downloaded blob URLs, plus preview timing, download size, persistence handoff, and errors. If launched with `run_beeper_bridge.sh`, the app output is appended to `data/app.log` and tailed into the launch terminal. The Beeper bridge logs upload/queue success and sync errors in that terminal too.
-- Grouped Snapchat media rows are handled individually even when they share an author and timestamp or span nested message lists. Beeper does not allow replies or reactions on media parts or media-only messages, whether received from Snapchat or sent from Beeper; replies and reactions on regular text messages remain supported. Newly discovered attachments on an already-published message are handed off in a follow-up batch; attachment-content hashes prevent duplicate storage. Video and audio types are validated against the downloaded blob MIME type, Snapchat stickers are sent as Matrix `m.sticker` events, and incoming voice notes are sent to Beeper as `m.audio`. Sending audio from Beeper to Snapchat is not supported.
-- Every sync also reads the currently visible chat-list rows without scrolling. Changes to an observed best-friend badge or streak-at-risk **⌛/⏳** create custom Beeper messages; positive Snapstreak counts are tracked for status commands but do not generate notifications. Risk notifications re-arm after the hourglass disappears. A streak missing from a visibly rendered chat row is treated as ended only after a later scan still finds it missing more than 15 minutes after its first observed absence; seeing the streak again restarts that grace period, and unrendered rows do not count. Regular polling only sees rows Snapchat currently renders. On a fresh database, the initial discovery captures the full list as it already scrolls for chat discovery, and initial best-friend and at-risk notifications are emitted after the first all-chat sync finishes.
-- Incoming reactions are read and updated when their visible chat rows are scanned, including existing messages earlier than the chat's new-message cursor. Otherwise, use **Sync now** if a reaction has not appeared. The reader recognizes Snapchat labels for ❤️, 😂, 🔥, 👍, 👎, 😢, 🤯, ❓, 😘, 😭, 💀, ‼️, 😡, and 🫡.
-- A new chat list is collected by **Find chats** or when sync needs to recover an empty saved list. Enable chats you want to keep synchronized.
-- Each chat has its own cursor. Chats without a recent cursor are backfilled from the latest seven days. Existing messages are deduplicated and preserved. If a full scan stops early, messages already collected are kept and the cursor is not advanced, so a later full sync can retry.
-- Normal history scans stop when a rendered message is older than the seven-day window. The full-history button bypasses this cutoff and bounds scrolling to two minutes per run. Scrolling allows time for Snapchat's virtualized message rows to load. If Snapchat does not open a chat, the app refreshes the page and retries; an incomplete scan is reported without discarding its results.
-- `last-received` is a display/status timestamp; it does not control each chat's sync cursor.
-
-## Snapchat Web compatibility
-
-The connector uses Playwright with the visible Snapchat Web page; it does not call Snapchat's private APIs. Snapchat may change its page structure. Chat discovery handles virtualized sidebar entries and excludes Spotlight links. Message extraction handles grouped rows where only the first row shows an author or timestamp, skips delivery/open status labels, and maps Dutch “IK” to “You.” For newly received media, it reads Snapchat blob URLs and media hosted on `cf-st.sc-cdn.net`, and opens image/video previews when needed to obtain the full-size image or video. If Snapchat supplies a still-image overlay beside a video tile, the app pairs them within their nearest unambiguous shared wrapper, uses `ffprobe` to read the video dimensions, and uses `ffmpeg` to scale and composite the overlay while preserving alpha. Overlay diagnostics report image dimensions, nontransparent-pixel bounds, and alpha range without logging image content. If compositing fails, the video is sent without a separate overlay image and the error is reported. Individual downloaded media files are limited to 40 MiB. Regular sends use the accessible composer and Send button (or Enter); replies scroll to the selected message and use its hover-only reply action before sending with Enter. If Snapchat changes these elements, the app reports an error and the selectors in `BrowserWorker` in `app.py` may need updating.
-
-## Beeper bridge
-
-The Go bridge uses mautrix bridgev2 and Beeper's bridge-manager config. It reads enabled chats and saved messages/reactions from the existing local API, creates bridge-managed Beeper chats, and sends Beeper text messages, PNG/JPEG/GIF image attachments, and emoji reactions through the existing Snapchat app. Outgoing images are limited to 40 MiB and use Snapchat Web's documented image types; outgoing videos and stickers are not supported by that web upload flow. Up to 10 outgoing image events per chat may be queued; the bridge processes image uploads one at a time and rejects additional images while that queue is full. For each image, the app waits until upload requests settle for three seconds before checking Snapchat's send control and sending. Before each subsequent queued image, it closes the chat, waits one second, and reopens it. Newly received images are sent as image messages, stickers as Matrix `m.sticker` events, and videos as video attachments, with large media stacks split into Beeper messages of at most 10 attachments. Media is uploaded only when its newly observed message is bridged. Replies, deletions, and reactions sent in Beeper are resolved to their original local Snapchat messages, including media-only image, video, and sticker messages. Replies locate Snapchat's localized hover action, and target lookup identifies media rows by sender, timestamp, and the media tile rather than requiring text in the row. Snapchat's eight standard emoji reactions are supported in both directions. A Beeper account can send one reaction per message; a new reaction replaces its prior one, while reactions from other people remain visible. Chats with one remote sender are registered as direct-message portals; chats with multiple remote senders are registered as group chats. Group member profiles use each sender's Snapchat name, and observed message senders are treated as a partial membership list so a limited message history cannot remove quieter group members. Existing group portals stay groups if a scan temporarily sees only one sender, and Snapchat title changes are reflected in Beeper unless the room name was customized. This lets Beeper treat one-to-one Snapchat portals as chats that can be merged with other direct chats. The bridge polls every five seconds; select chats on the local page to control which chats are created and synced.
-- Messages sent from Beeper keep their Beeper message ID when the Snapchat echo is saved locally. Incoming Snapchat replies can then point to the exact Beeper message, instead of a separately generated local message ID.
-
-The default build uses mautrix's libolm crypto support. On macOS without libolm, build and run with `-tags nocrypto`; this disables Matrix end-to-end encryption support, so the bridge config must also disable encryption. In either case, self-hosted bridge traffic is processed by the bridge and Beeper's servers.
-
-1. Install and authenticate `bbctl` as described in the [bridge-manager README](https://github.com/beeper/bridge-manager#usage).
-2. Before starting either `python3 app.py` or `./run_beeper_bridge.sh`, open all your Snapchat chats and snaps. Chats and snaps that have not been opened may be ignored and will not be enabled for the bridge.
-3. Start the web app with `python3 app.py` if you want it to run by itself. The bridge launcher also starts the web app automatically when it is not already running. After updating the app, restart any already-running `app.py` process so it exposes the startup-sync status used by automatic login.
-4. Run the launcher to register `sh-snapchat` if needed and start the bridge:
+1. Before the first bridge sync, open your Snapchat chats and Snaps in the browser window so they can be discovered.
+2. Run the launcher:
 
    ```sh
    ./run_beeper_bridge.sh
    ```
 
-   If `sh-snapchat` is not registered, the launcher generates `data/beeper-bridge.yaml`, runs the temporary registration process for 15 seconds, stops that process, and then starts the bridge directly. The bridge waits until the local app's initial sync attempt has finished and is no longer syncing, printing progress such as `Syncing 5/10 chats: Chat name` in the console, then automatically connects the local Snapchat session for the Beeper user reported by `bbctl whoami`. A chat history scan stopping early does not prevent automatic login; errors that stop the sync attempt itself do. If that user already has a Snapchat login, it leaves it alone. If `sh-snapchat` is already registered when the launcher starts, it skips registration and automatic login, and starts the bridge directly. The web app is left running independently.
-   If someone sends you a chat or snap while the initial sync is running, stop the launcher, remove the bridge from Beeper, and run the setup again.
-5. When automatic login is not enabled (for example, when `sh-snapchat` was already registered), the bridge only connects the appservice. To connect manually, once the bridge bot appears in Beeper, open a direct chat with its bot account and send:
+   The launcher starts the Snapchat browser automation and Go bridge. If `sh-snapchat` is not registered, it generates the bridge configuration, registers the bridge, and then starts it. Keep the launcher running.
+3. If automatic login is not available, open a direct chat with the bridge bot in Beeper and send:
 
    ```text
    !snapchat login local
    ```
 
-   The bot checks that the local app is already signed in. On successful login, it creates bridge-managed chats for enabled conversations and syncs saved text history.
+   The bot checks the existing Snapchat sign-in, creates chats for enabled conversations, and synchronizes saved text history.
 
-Keep the local Snapchat app and bridge process running. No Python Beeper adapter or `bbctl proxy` is needed. If you remove the bridge from Beeper, rerun `./run_beeper_bridge.sh` to register it again. The generated config contains credentials; keep it private and do not share or commit it.
+The generated `data/beeper-bridge.yaml` contains credentials; keep it private and do not share or commit it. The optional Go bridge uses mautrix bridgev2. On macOS without libolm, build and run with `-tags nocrypto`; this disables Matrix end-to-end encryption, so bridge encryption must also be disabled.
+
+## Reset the bridge
+
+Stop the bridge, then run:
+
+```sh
+python3 reset_database.py --confirm
+```
+
+This removes the `sh-snapchat` Beeper registration, backs up and clears the local chat database, and removes log entries older than 24 hours. `bbctl` prompts for confirmation. Start the bridge again with `./run_beeper_bridge.sh`.
